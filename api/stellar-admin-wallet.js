@@ -1,7 +1,7 @@
 // api/stellar-admin-wallet.js
-import StellarSdk from 'stellar-sdk';
+const { Server, Keypair, Networks, TransactionBuilder, Operation, Asset } = require('stellar-sdk');
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   const adminSecret = process.env.ADMIN_STELLAR_SECRET;
   const adminPublic = process.env.ADMIN_STELLAR_PUBLIC;
   const network = process.env.STELLAR_NETWORK || 'testnet';
@@ -9,7 +9,7 @@ export default async function handler(req, res) {
     ? 'https://horizon-testnet.stellar.org'
     : 'https://horizon.stellar.org';
 
-  const server = new StellarSdk.Server(horizonUrl);
+  const server = new Server(horizonUrl);
 
   // GET: Return admin wallet balance
   if (req.method === 'GET') {
@@ -25,7 +25,6 @@ export default async function handler(req, res) {
 
   // POST: Send XLM from admin to destination
   if (req.method === 'POST') {
-    // For Vercel/Node.js API routes, parse JSON body if not already parsed
     let body = req.body;
     if (!body) {
       try {
@@ -41,18 +40,18 @@ export default async function handler(req, res) {
       return;
     }
     try {
-      const adminKeypair = StellarSdk.Keypair.fromSecret(adminSecret);
+      const adminKeypair = Keypair.fromSecret(adminSecret);
       const account = await server.loadAccount(adminKeypair.publicKey());
       const fee = await server.fetchBaseFee();
-      const tx = new StellarSdk.TransactionBuilder(account, {
+      const tx = new TransactionBuilder(account, {
         fee,
         networkPassphrase: network === 'testnet'
-          ? StellarSdk.Networks.TESTNET
-          : StellarSdk.Networks.PUBLIC
+          ? Networks.TESTNET
+          : Networks.PUBLIC
       })
-        .addOperation(StellarSdk.Operation.payment({
+        .addOperation(Operation.payment({
           destination,
-          asset: StellarSdk.Asset.native(),
+          asset: Asset.native(),
           amount: amount.toString()
         }))
         .setTimeout(30)
