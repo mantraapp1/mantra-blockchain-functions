@@ -1,42 +1,33 @@
-// Import the Stellar SDK using CommonJS require.
-// This works with Vercel's Node.js runtime and stellar-sdk@8.2.3 (recommended for CJS).
-const { Server, Keypair, Networks, TransactionBuilder, Operation, Asset } = require('stellar-sdk');
+// Import Stellar SDK using ESM syntax
+import { Server, Keypair, Networks, TransactionBuilder, Operation, Asset } from 'stellar-sdk';
 
-// Export the handler function for Vercel's Node.js serverless API route.
-module.exports = async function handler(req, res) {
-  // Read secrets and config from environment variables set in Vercel dashboard.
+// Vercel expects a default export for API routes in ESM
+export default async function handler(req, res) {
   const adminSecret = process.env.ADMIN_STELLAR_SECRET;
   const adminPublic = process.env.ADMIN_STELLAR_PUBLIC;
   const network = process.env.STELLAR_NETWORK || 'testnet';
-
-  // Choose the correct Horizon URL based on the network.
   const horizonUrl = network === 'testnet'
     ? 'https://horizon-testnet.stellar.org'
     : 'https://horizon.stellar.org';
 
-  // Initialize the Stellar server connection.
   const server = new Server(horizonUrl);
 
-  // Handle GET requests: Return the admin wallet's XLM balance.
+  // GET: Return admin wallet balance
   if (req.method === 'GET') {
     try {
-      // Load the admin account from the Stellar network.
       const account = await server.loadAccount(adminPublic);
-      // Find the native (XLM) balance.
       const balanceObj = account.balances.find(b => b.asset_type === 'native');
-      // Respond with the balance as JSON.
       res.status(200).json({ balance: balanceObj.balance });
     } catch (err) {
-      // Handle errors (e.g., account not found).
       res.status(500).json({ error: err.message });
     }
     return;
   }
 
-  // Handle POST requests: Send XLM from admin to a destination address.
+  // POST: Send XLM from admin to destination
   if (req.method === 'POST') {
     let body = req.body;
-    // If req.body is not already parsed, parse it as JSON.
+    // For Vercel ESM API, req.body is already parsed if Content-Type is application/json
     if (!body) {
       try {
         body = JSON.parse(await getRawBody(req));
@@ -46,19 +37,14 @@ module.exports = async function handler(req, res) {
       }
     }
     const { destination, amount } = body;
-    // Validate required fields.
     if (!destination || !amount) {
       res.status(400).json({ error: 'Missing destination or amount' });
       return;
     }
     try {
-      // Create the admin keypair from the secret.
       const adminKeypair = Keypair.fromSecret(adminSecret);
-      // Load the admin account from the Stellar network.
       const account = await server.loadAccount(adminKeypair.publicKey());
-      // Fetch the current base fee for transactions.
       const fee = await server.fetchBaseFee();
-      // Build a transaction to send XLM.
       const tx = new TransactionBuilder(account, {
         fee,
         networkPassphrase: network === 'testnet'
@@ -73,24 +59,20 @@ module.exports = async function handler(req, res) {
         .setTimeout(30)
         .build();
 
-      // Sign the transaction with the admin's secret key.
       tx.sign(adminKeypair);
-      // Submit the transaction to the Stellar network.
       const result = await server.submitTransaction(tx);
-      // Respond with the transaction result.
       res.status(200).json({ result });
     } catch (err) {
-      // Handle errors (e.g., bad destination, insufficient funds).
       res.status(500).json({ error: err.message });
     }
     return;
   }
 
-  // For any other HTTP methods, return "Method Not Allowed".
+  // Method not allowed
   res.status(405).json({ error: 'Method not allowed' });
-};
+}
 
-// Helper for raw body parsing (for POST requests).
+// Helper for raw body parsing (for POST requests, if needed)
 async function getRawBody(req) {
   return new Promise((resolve, reject) => {
     let data = '';

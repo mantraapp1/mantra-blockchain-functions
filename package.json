@@ -19,6 +19,6 @@
   },
   "homepage": "https://github.com/mantraapp1/mantra-blockchain-functions#readme",
   "dependencies": {
-    "stellar-sdk": "^13.3.0"
+    "stellar-sdk": "^8.2.3"
   }
 }
