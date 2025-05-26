@@ -1,9 +1,7 @@
 // api/stellar-admin-wallet.js
-import { NextResponse } from 'next/server';
 import StellarSdk from 'stellar-sdk';
 
 export default async function handler(req, res) {
-  // Read secrets from Vercel env variables
   const adminSecret = process.env.ADMIN_STELLAR_SECRET;
   const adminPublic = process.env.ADMIN_STELLAR_PUBLIC;
   const network = process.env.STELLAR_NETWORK || 'testnet';
@@ -12,23 +10,38 @@ export default async function handler(req, res) {
     : 'https://horizon.stellar.org';
 
   const server = new StellarSdk.Server(horizonUrl);
-  const adminKeypair = StellarSdk.Keypair.fromSecret(adminSecret);
 
-  // Example: Get balance
+  // GET: Return admin wallet balance
   if (req.method === 'GET') {
     try {
       const account = await server.loadAccount(adminPublic);
       const balanceObj = account.balances.find(b => b.asset_type === 'native');
-      return res.status(200).json({ balance: balanceObj.balance });
+      res.status(200).json({ balance: balanceObj.balance });
     } catch (err) {
-      return res.status(500).json({ error: err.message });
+      res.status(500).json({ error: err.message });
     }
+    return;
   }
 
-  // Example: Send XLM (POST body: { destination, amount })
+  // POST: Send XLM from admin to destination
   if (req.method === 'POST') {
-    const { destination, amount } = req.body;
+    // For Vercel/Node.js API routes, parse JSON body if not already parsed
+    let body = req.body;
+    if (!body) {
+      try {
+        body = JSON.parse(await getRawBody(req));
+      } catch (e) {
+        res.status(400).json({ error: 'Invalid JSON body' });
+        return;
+      }
+    }
+    const { destination, amount } = body;
+    if (!destination || !amount) {
+      res.status(400).json({ error: 'Missing destination or amount' });
+      return;
+    }
     try {
+      const adminKeypair = StellarSdk.Keypair.fromSecret(adminSecret);
       const account = await server.loadAccount(adminKeypair.publicKey());
       const fee = await server.fetchBaseFee();
       const tx = new StellarSdk.TransactionBuilder(account, {
@@ -47,11 +60,23 @@ export default async function handler(req, res) {
 
       tx.sign(adminKeypair);
       const result = await server.submitTransaction(tx);
-      return res.status(200).json({ result });
+      res.status(200).json({ result });
     } catch (err) {
-      return res.status(500).json({ error: err.message });
+      res.status(500).json({ error: err.message });
     }
+    return;
   }
 
-  return res.status(405).json({ error: 'Method not allowed' });
+  // Method not allowed
+  res.status(405).json({ error: 'Method not allowed' });
+}
+
+// Helper for raw body parsing (for POST requests)
+async function getRawBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', chunk => { data += chunk; });
+    req.on('end', () => resolve(data));
+    req.on('error', err => reject(err));
+  });
 }
