@@ -1,5 +1,5 @@
 // api/stellar-admin-wallet.js
-const { Server, Keypair, Networks, TransactionBuilder, Operation, Asset } = require('stellar-sdk');
+const StellarSdk = require('stellar-sdk');
 
 module.exports = async function handler(req, res) {
   const adminSecret = process.env.ADMIN_STELLAR_SECRET;
@@ -9,7 +9,7 @@ module.exports = async function handler(req, res) {
     ? 'https://horizon-testnet.stellar.org'
     : 'https://horizon.stellar.org';
 
-  const server = new Server(horizonUrl);
+  const server = new StellarSdk.Server(horizonUrl);
 
   // GET: Return admin wallet balance
   if (req.method === 'GET') {
@@ -40,18 +40,18 @@ module.exports = async function handler(req, res) {
       return;
     }
     try {
-      const adminKeypair = Keypair.fromSecret(adminSecret);
+      const adminKeypair = StellarSdk.Keypair.fromSecret(adminSecret);
       const account = await server.loadAccount(adminKeypair.publicKey());
       const fee = await server.fetchBaseFee();
-      const tx = new TransactionBuilder(account, {
+      const tx = new StellarSdk.TransactionBuilder(account, {
         fee,
         networkPassphrase: network === 'testnet'
-          ? Networks.TESTNET
-          : Networks.PUBLIC
+          ? StellarSdk.Networks.TESTNET
+          : StellarSdk.Networks.PUBLIC
       })
-        .addOperation(Operation.payment({
+        .addOperation(StellarSdk.Operation.payment({
           destination,
-          asset: Asset.native(),
+          asset: StellarSdk.Asset.native(),
           amount: amount.toString()
         }))
         .setTimeout(30)
